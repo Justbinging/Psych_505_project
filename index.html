@@ -206,14 +206,15 @@
         }
 
         function submitToGoogle() {
+            // Updated payload keys to perfectly match the Apps Script expectations
             const payload = {
-                pid: state.pid,
-                time_group: state.tg,
-                reward_group: state.rg,
-                age: state.age,
-                major: state.major,
-                ethnicity: state.eth,
-                score: state.score
+                "Participant number": state.pid,
+                "Time": state.tg,
+                "Reward": state.rg,
+                "Age": state.age,
+                "Major": state.major,
+                "Ethnicity": state.eth,
+                "Score": state.score
             };
 
             // Use no-cors mode to bypass CORS issues with Google Apps Script redirects
