@@ -14,7 +14,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Admin Section -->
         <div id="step-admin">
             <h2>Admin: Generate Experiment Link</h2>
             <div class="mb-3">
@@ -42,7 +41,6 @@
             </div>
         </div>
 
-        <!-- Page 1: Demographics -->
         <div id="step-demographics" class="hidden">
             <h2>Page 1: Demographics</h2>
             <div class="mb-3"><label>Age:</label><input type="number" id="age" class="form-control"></div>
@@ -51,7 +49,6 @@
             <button onclick="saveDemographics()" class="btn btn-primary">Next</button>
         </div>
 
-        <!-- Page 2: Instructions -->
         <div id="step-instructions" class="hidden">
             <h2>Page 2: Instructions</h2>
             <p>In this experiment, you will watch a short video and answer a series of questions based on its details.</p>
@@ -59,7 +56,6 @@
             <button onclick="showSection('step-video')" class="btn btn-primary">Next</button>
         </div>
 
-        <!-- Page 3: Video -->
         <div id="step-video" class="hidden">
             <h2>Page 3: Watch Video</h2>
             <div class="ratio ratio-16x9 mb-3">
@@ -68,7 +64,6 @@
             <button onclick="startQuestions()" class="btn btn-primary">Next</button>
         </div>
 
-        <!-- Pages 4-14: Questions -->
         <div id="step-question" class="hidden">
             <h2 id="question-title">Page X: Question</h2>
             <p class="lead" id="question-text"></p>
@@ -77,14 +72,12 @@
             <button onclick="submitAnswer()" class="btn btn-primary mt-3">Next</button>
         </div>
 
-        <!-- Page 15: Final -->
         <div id="step-final" class="hidden">
             <h2>Page 15: Experiment Complete</h2>
             <p>Your final score is: <strong id="final-score"></strong> / 11</p>
-            <button onclick="submitToGoogle()" class="btn btn-success">Finish</button>
+            <button id="finish-btn" class="btn btn-secondary" disabled>Saving data...</button>
         </div>
 
-        <!-- Final Thanks -->
         <div id="step-thanks" class="hidden">
             <h2>Experiment Complete</h2>
             <p>Thank you for participating! Your data has been saved successfully.</p>
@@ -111,6 +104,9 @@
             pid: '', tg: '', rg: '', age: '', major: '', eth: '',
             score: 0, currentQ: 0, timer: null
         };
+
+        // Add a safety lock variable for saving
+        let isSaving = false;
 
         function showSection(id) {
             document.querySelectorAll('.container > div').forEach(div => div.classList.add('hidden'));
@@ -187,6 +183,10 @@
             if (state.currentQ >= QUESTIONS.length) {
                 document.getElementById('final-score').innerText = state.score;
                 showSection('step-final');
+                
+                // Automatically start saving the data
+                submitToGoogle(); 
+                
                 return;
             }
 
@@ -235,7 +235,12 @@
         }
 
         function submitToGoogle() {
-            // Updated payload keys to perfectly match the Apps Script expectations
+            // If we are already saving, stop right here. Do not proceed.
+            if (isSaving) return; 
+            
+            // Lock the function so it can't be triggered again
+            isSaving = true;
+
             const payload = {
                 "Participant number": state.pid,
                 "Time": state.tg,
@@ -246,7 +251,6 @@
                 "Score": state.score
             };
 
-            // Use no-cors mode to bypass CORS issues with Google Apps Script redirects
             fetch(SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
@@ -258,6 +262,16 @@
             }).catch(err => {
                 console.error(err);
                 alert("There was an error saving your data. Please contact the researcher.");
+                
+                // If it fails, unlock it and let them try clicking again
+                isSaving = false; 
+                const btn = document.getElementById('finish-btn');
+                if (btn) {
+                    btn.innerText = "Try Again";
+                    btn.disabled = false;
+                    btn.classList.replace('btn-secondary', 'btn-danger');
+                    btn.onclick = submitToGoogle; // Re-add the click ability
+                }
             });
         }
     </script>
