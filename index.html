@@ -73,13 +73,14 @@
         </div>
 
         <div id="step-final" class="hidden">
-            <h2>Page 15: Experiment Complete</h2>
+            <h2>Saving Results...</h2>
             <p>Your final score is: <strong id="final-score"></strong> / 11</p>
             <button id="finish-btn" class="btn btn-secondary" disabled>Saving data...</button>
         </div>
 
         <div id="step-thanks" class="hidden">
             <h2>Experiment Complete</h2>
+            <p class="lead">Your final score is: <strong id="thanks-score"></strong> / 11</p>
             <p>Thank you for participating! Your data has been saved successfully.</p>
         </div>
     </div>
@@ -181,7 +182,11 @@
 
         function showQuestion() {
             if (state.currentQ >= QUESTIONS.length) {
+                // Display the score on the temporary loading screen
                 document.getElementById('final-score').innerText = state.score;
+                // Display the score on the actual final screen
+                document.getElementById('thanks-score').innerText = state.score;
+                
                 showSection('step-final');
                 
                 // Automatically start saving the data
