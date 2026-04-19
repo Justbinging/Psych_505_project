@@ -120,21 +120,50 @@
         // Init: Check for URL parameters
         window.onload = () => {
             const params = new URLSearchParams(window.location.search);
-            if (params.has('pid')) {
+            
+            // Check for the new encoded 'd' parameter
+            if (params.has('d')) {
+                try {
+                    // Decode the Base64 string and parse it back into an object
+                    const decodedData = JSON.parse(atob(params.get('d')));
+                    
+                    state.pid = decodedData.p;
+                    state.tg = decodedData.t;
+                    state.rg = decodedData.r;
+                    
+                    if (state.rg === 'reward') {
+                        document.getElementById('reward-notice').classList.remove('hidden');
+                    }
+                    showSection('step-demographics');
+                } catch (error) {
+                    console.error("Failed to decode link parameters", error);
+                    alert("This experiment link appears to be invalid or broken.");
+                }
+            } 
+            // Fallback for your old plain-text links (useful for testing)
+            else if (params.has('pid')) {
                 state.pid = params.get('pid');
                 state.tg = params.get('tg');
                 state.rg = params.get('rg');
+                
                 if (state.rg === 'reward') document.getElementById('reward-notice').classList.remove('hidden');
                 showSection('step-demographics');
             }
         };
-
+        
         function generateLink() {
             const pid = document.getElementById('admin-pid').value;
             const tg = document.getElementById('admin-tg').value;
             const rg = document.getElementById('admin-rg').value;
             const baseUrl = window.location.href.split('?')[0];
-            const link = `${baseUrl}?pid=${pid}&tg=${tg}&rg=${rg}`;
+            
+            // Bundle the data, stringify it, and encode it into Base64
+            const expData = { p: pid, t: tg, r: rg };
+            const encodedData = btoa(JSON.stringify(expData));
+            
+            // Create the new secure-looking link
+            const link = `${baseUrl}?d=${encodedData}`;
+            
             const linkEl = document.getElementById('exp-link');
             linkEl.href = link;
             linkEl.innerText = link;
