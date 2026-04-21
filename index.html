@@ -9,8 +9,19 @@
         body { padding: 50px; background-color: #f8f9fa; }
         .container { max-width: 800px; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         .timer { color: red; font-weight: bold; }
-        .hidden { display: none; }
+        .hidden { display: none !important; }
         .form-check { margin-bottom: 10px; }
+        /* The glass overlay to prevent clicking the video */
+        .glass-overlay {
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            z-index: 10; 
+            cursor: not-allowed;
+            background: rgba(0,0,0,0); /* Completely transparent */
+        }
     </style>
 </head>
 <body>
@@ -60,10 +71,14 @@
 
         <div id="step-video" class="hidden">
             <h2>Page 3: Watch Video</h2>
-            <div class="ratio ratio-16x9 mb-3">
-                <iframe src="https://www.youtube.com/embed/mWOR-XVbYgE?start=12" allowfullscreen></iframe>
+            <p>Please click "Start Video" when you are ready. <strong>You cannot pause, rewind, or rewatch this video.</strong> The questions will begin automatically when it finishes.</p>
+            
+            <button id="start-video-btn" onclick="playExpVideo()" class="btn btn-success mb-3">Start Video</button>
+            
+            <div class="ratio ratio-16x9 mb-3" style="position: relative;">
+                <div id="yt-player"></div>
+                <div class="glass-overlay"></div>
             </div>
-            <button onclick="startQuestions()" class="btn btn-primary">Next</button>
         </div>
 
         <div id="step-question" class="hidden">
@@ -88,6 +103,48 @@
     </div>
 
     <script>
+        // --- YOUTUBE API SETUP ---
+        let player;
+        
+        // Load the YouTube IFrame Player API code asynchronously.
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        // This function executes automatically once the API is loaded.
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('yt-player', {
+                videoId: 'mWOR-XVbYgE', // Your target video
+                playerVars: {
+                    'start': 12,        // Start at 12s
+                    'controls': 0,      // Hide controls
+                    'disablekb': 1,     // Disable keyboard shortcuts
+                    'rel': 0,           // Hide related videos at the end
+                    'modestbranding': 1,
+                    'playsinline': 1
+                },
+                events: {
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        function playExpVideo() {
+            document.getElementById('start-video-btn').classList.add('hidden');
+            player.playVideo();
+        }
+
+        function onPlayerStateChange(event) {
+            // event.data === 0 means the video has ENDED
+            if (event.data === YT.PlayerState.ENDED) {
+                startQuestions();
+            }
+        }
+        // --- END YOUTUBE API SETUP ---
+
+
+        // --- EXPERIMENT LOGIC ---
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz6lnb46hwrj1mZ4275z3yY9pGWDIsfv4lqKPMHaMSVsPGkDUfpW9s5FuNuSkImVWfs/exec";
         
         const SCALE_OPTIONS = [
@@ -99,12 +156,12 @@
             "Definitely False"
         ];
 
-        // Rephrased statements with their actual truth values
+        // 10 Facts mapped to statements and truth values
         const QUESTIONS = [
             { q: "The initial piece of track visible at the very start of the video is green.", isTrue: false },
             { q: "The weather outside the house appears to be bright and sunny.", isTrue: true },
             { q: "The house featured in the video consists of exactly three floors.", isTrue: false },
-            { q: "A piano is visible somewhere inside the house.", isTrue: true },
+            { q: "A piano is clearly visible somewhere inside the house.", isTrue: true },
             { q: "The rolling ball's path travels directly through the kitchen area.", isTrue: true },
             { q: "There is a sign in the house that explicitly reads, 'There will be a $200 charge for whining'.", isTrue: false },
             { q: "At the end of its journey, the ball comes to a stop in front of five small wooden buildings.", isTrue: false },
@@ -121,7 +178,12 @@
         let isSaving = false;
 
         function showSection(id) {
-            document.querySelectorAll('.container > div').forEach(div => div.classList.add('hidden'));
+            document.querySelectorAll('.container > div').forEach(div => {
+                // Ignore the embedded player itself when hiding containers
+                if(div.id !== 'yt-player') {
+                    div.classList.add('hidden');
+                }
+            });
             document.getElementById(id).classList.remove('hidden');
         }
 
@@ -180,6 +242,10 @@
         }
 
         function startQuestions() {
+            // Stop the video just in case to mute sound/background playback
+            if(player && typeof player.stopVideo === 'function') {
+                player.stopVideo();
+            }
             state.currentQ = 0;
             showQuestion();
         }
@@ -238,7 +304,7 @@
                 const isTrue = QUESTIONS[state.currentQ].isTrue;
                 let points = 0;
 
-                // Confidence-weighted scoring (0 to 5 points)
+                // Confidence-weighted scoring
                 if (isTrue) {
                     if (answer === "Definitely True") points = 5;
                     else if (answer === "Probably True") points = 4;
@@ -257,7 +323,6 @@
                 
                 state.score += points;
             }
-            // If they ran out of time and selected nothing, they get 0 points for this question.
 
             state.currentQ++;
             showQuestion();
