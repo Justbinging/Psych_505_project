@@ -117,7 +117,8 @@
             player = new YT.Player('yt-player', {
                 videoId: 'mWOR-XVbYgE', // Your target video
                 playerVars: {
-                    'start': 12,        // Start at 12s
+                    'start': 0,         // Start at the beginning (0 seconds)
+                    'end': 252,         // End at 4:12 (252 seconds)
                     'controls': 0,      // Hide controls
                     'disablekb': 1,     // Disable keyboard shortcuts
                     'rel': 0,           // Hide related videos at the end
@@ -136,7 +137,7 @@
         }
 
         function onPlayerStateChange(event) {
-            // event.data === 0 means the video has ENDED
+            // event.data === 0 means the video has ENDED (this also triggers when the 'end' time is reached)
             if (event.data === YT.PlayerState.ENDED) {
                 startQuestions();
             }
