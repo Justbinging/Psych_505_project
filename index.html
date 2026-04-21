@@ -137,7 +137,7 @@
         }
 
         function onPlayerStateChange(event) {
-            // event.data === 0 means the video has ENDED (this also triggers when the 'end' time is reached)
+            // event.data === 0 means the video has ENDED
             if (event.data === YT.PlayerState.ENDED) {
                 startQuestions();
             }
@@ -171,9 +171,11 @@
             { q: "A dog makes a brief appearance at some point during the video.", isTrue: false }
         ];
 
+        // Added arrays for answers and times, and a tracker for start time
         let state = {
             pid: '', tg: '', rg: '', age: '', major: '', eth: '',
-            score: 0, currentQ: 0, timer: null
+            score: 0, currentQ: 0, timer: null,
+            answers: [], times: [], qStartTime: 0
         };
 
         let isSaving = false;
@@ -243,7 +245,6 @@
         }
 
         function startQuestions() {
-            // Stop the video just in case to mute sound/background playback
             if(player && typeof player.stopVideo === 'function') {
                 player.stopVideo();
             }
@@ -276,6 +277,8 @@
                     </div>`;
             });
 
+            // Start timing the question
+            state.qStartTime = Date.now();
             showSection('step-question');
 
             if (state.tg === 'limited') {
@@ -298,32 +301,42 @@
 
         function submitAnswer() {
             clearInterval(state.timer);
+            
+            // Calculate elapsed time in seconds with 2 decimal places
+            const timeTaken = ((Date.now() - state.qStartTime) / 1000).toFixed(2);
+            
             const selected = document.querySelector('input[name="answer"]:checked');
             
+            let answerValue = "No Answer"; // Fallback if they run out of time
+
             if (selected) {
-                const answer = selected.value;
+                answerValue = selected.value;
                 const isTrue = QUESTIONS[state.currentQ].isTrue;
                 let points = 0;
 
                 // Confidence-weighted scoring
                 if (isTrue) {
-                    if (answer === "Definitely True") points = 5;
-                    else if (answer === "Probably True") points = 4;
-                    else if (answer === "Might be True") points = 3;
-                    else if (answer === "Might be False") points = 2;
-                    else if (answer === "Probably False") points = 1;
-                    else if (answer === "Definitely False") points = 0;
+                    if (answerValue === "Definitely True") points = 5;
+                    else if (answerValue === "Probably True") points = 4;
+                    else if (answerValue === "Might be True") points = 3;
+                    else if (answerValue === "Might be False") points = 2;
+                    else if (answerValue === "Probably False") points = 1;
+                    else if (answerValue === "Definitely False") points = 0;
                 } else {
-                    if (answer === "Definitely False") points = 5;
-                    else if (answer === "Probably False") points = 4;
-                    else if (answer === "Might be False") points = 3;
-                    else if (answer === "Might be True") points = 2;
-                    else if (answer === "Probably True") points = 1;
-                    else if (answer === "Definitely True") points = 0;
+                    if (answerValue === "Definitely False") points = 5;
+                    else if (answerValue === "Probably False") points = 4;
+                    else if (answerValue === "Might be False") points = 3;
+                    else if (answerValue === "Might be True") points = 2;
+                    else if (answerValue === "Probably True") points = 1;
+                    else if (answerValue === "Definitely True") points = 0;
                 }
                 
                 state.score += points;
             }
+
+            // Save the answer and the time taken for this question
+            state.answers.push(answerValue);
+            state.times.push(timeTaken);
 
             state.currentQ++;
             showQuestion();
@@ -333,6 +346,7 @@
             if (isSaving) return; 
             isSaving = true;
 
+            // Including the Answers and Times arrays
             const payload = {
                 "Participant number": state.pid,
                 "Time": state.tg,
@@ -340,7 +354,9 @@
                 "Age": state.age,
                 "Major": state.major,
                 "Ethnicity": state.eth,
-                "Score": state.score
+                "Score": state.score,
+                "Answers": state.answers,
+                "Times": state.times
             };
 
             fetch(SCRIPT_URL, {
