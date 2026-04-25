@@ -73,7 +73,7 @@
                     <li>Incorrect + "Probably": 1 pt</li>
                     <li>Incorrect + "Definitely": 0 pts</li>
                 </ul>
-                <p><strong>Current Top Performers:</strong></p>
+                <p><strong>Top Performers:</strong></p>
                 <ol id="dynamic-leaderboard" class="mb-1" style="font-size: 0.9em; font-weight: bold;">
                     <li>Loading live data...</li>
                 </ol>
@@ -123,7 +123,7 @@
             <p id="thanks-rank-display" class="hidden text-success fs-4"></p>
             
             <div id="finalChartContainer" class="hidden mt-4 mb-4 p-3 bg-white border rounded shadow-sm">
-                <h5 class="text-center mb-3">Final Standings</h5>
+                <h5 class="text-center mb-3">Final Standings (All Participants)</h5>
                 <canvas id="finalChart"></canvas>
             </div>
 
@@ -221,7 +221,6 @@
             const labels = data.map(p => p.pid === highlightPid ? `You (${p.pid})` : `P-${p.pid}`);
             const scores = data.map(p => p.score);
             
-            // Highlight the current user in red, others in blue
             const bgColors = data.map(p => p.pid === highlightPid ? 'rgba(255, 99, 132, 0.7)' : 'rgba(54, 162, 235, 0.7)');
             const borderColors = data.map(p => p.pid === highlightPid ? 'rgba(255, 99, 132, 1)' : 'rgba(54, 162, 235, 1)');
 
@@ -240,7 +239,13 @@
                 options: {
                     responsive: true,
                     scales: {
-                        y: { beginAtZero: true, max: 50 }
+                        y: { beginAtZero: true, max: 50 },
+                        x: {
+                            ticks: {
+                                // Hide labels on x-axis if there are too many participants to keep it clean
+                                display: data.length <= 15
+                            }
+                        }
                     },
                     plugins: {
                         legend: { display: false }
@@ -273,14 +278,15 @@
                 return;
             }
             list.innerHTML = "";
+            // List only the top 3 scores in text
             topPerformers.slice(0, 3).forEach(p => {
                 list.innerHTML += `<li>Participant ${p.pid} - ${p.score} pts</li>`;
             });
             document.getElementById('leaderboard-target').innerText = `Beat ${topPerformers[0].score} pts!`;
             
-            // Draw the instruction page graph (Top 5)
+            // Draw the instruction page graph using ALL participants
             document.getElementById('instructionChartContainer').classList.remove('hidden');
-            drawChart('instructionChart', topPerformers.slice(0, 5), null);
+            drawChart('instructionChart', topPerformers, null);
         }
         
         function generateLink() {
@@ -420,22 +426,13 @@
             document.getElementById('finalChartContainer').classList.remove('hidden');
             
             let finalData = [...topPerformers];
-            // Remove the user from the array if they accidentally got fetched twice
             finalData = finalData.filter(p => p.pid !== state.pid); 
             
-            // Add the user's new score to the dataset and sort it
             finalData.push({pid: state.pid, score: state.score});
             finalData.sort((a, b) => b.score - a.score);
             
-            // Take top 5
-            let chartData = finalData.slice(0, 5);
-            
-            // If the user didn't make the top 5, append them to the end of the chart anyway
-            if (!chartData.find(p => p.pid === state.pid)) {
-                chartData.push({pid: state.pid, score: state.score});
-            }
-            
-            drawChart('finalChart', chartData, state.pid);
+            // Draw the final page graph using ALL participants
+            drawChart('finalChart', finalData, state.pid);
         }
 
         function submitToGoogle() {
@@ -462,7 +459,6 @@
                 body: JSON.stringify(payload)
             }).then(() => {
                 showSection('step-thanks');
-                // Render the graph after switching to the thanks section so the canvas has physical dimensions
                 renderFinalGraph();
             }).catch(err => {
                 console.error(err);
