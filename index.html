@@ -11,16 +11,11 @@
         .timer { color: red; font-weight: bold; }
         .hidden { display: none !important; }
         .form-check { margin-bottom: 10px; }
-        /* The glass overlay to prevent clicking the video */
         .glass-overlay {
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            z-index: 10; 
-            cursor: not-allowed;
-            background: rgba(0,0,0,0); /* Completely transparent */
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; cursor: not-allowed; background: rgba(0,0,0,0);
+        }
+        .leaderboard-box {
+            background-color: #fff3cd; border: 1px solid #ffe69c; border-radius: 8px; padding: 15px; margin-top: 20px;
         }
     </style>
 </head>
@@ -35,21 +30,21 @@
             <div class="mb-3">
                 <label>Time Group:</label>
                 <select id="admin-tg" class="form-select">
-                    <option value="unlimited">Unlimited Time</option>
-                    <option value="limited">Limited Time (15s per question)</option>
+                    <option value="no time limit group">No time limit group</option>
+                    <option value="time limited group">Time limited group</option>
                 </select>
             </div>
             <div class="mb-3">
                 <label>Reward Group:</label>
                 <select id="admin-rg" class="form-select">
-                    <option value="no reward">No Reward</option>
-                    <option value="reward">Reward</option>
+                    <option value="no reward group">No reward group</option>
+                    <option value="reward group">Reward group (Old - No Leaderboard)</option>
+                    <option value="leaderboard group">Leaderboard group (New)</option>
                 </select>
             </div>
             <button onclick="generateLink()" class="btn btn-primary">Generate Link</button>
             <div id="link-display" class="mt-4 alert alert-success hidden">
-                <strong>Link Generated:</strong> <br>
-                <a id="exp-link" href="#"></a>
+                <strong>Link Generated:</strong> <br><a id="exp-link" href="#"></a>
             </div>
         </div>
 
@@ -65,16 +60,32 @@
             <h2>Page 2: Instructions</h2>
             <p>In this experiment, you will watch a short video. Afterward, you will be presented with a series of statements about the video.</p>
             <p>For each statement, you must rate how true or false you believe it is using a confidence scale.</p>
-            <p id="reward-notice" class="hidden text-success fw-bold">You will get a final score based on both your accuracy and your confidence level. Completing this accurately qualifies you for a reward.</p>
-            <button onclick="showSection('step-video')" class="btn btn-primary">Next</button>
+            
+            <div id="leaderboard-instructions" class="hidden leaderboard-box">
+                <h4 class="text-warning-emphasis">🏆 Leaderboard Challenge</h4>
+                <p><strong>Scoring Criteria:</strong> You earn up to 5 points per question based on your accuracy and confidence. Maximum score is 50 points.</p>
+                <ul class="mb-3" style="font-size: 0.9em;">
+                    <li>Correct + "Definitely": 5 pts</li>
+                    <li>Correct + "Probably": 4 pts</li>
+                    <li>Correct + "Might be": 3 pts</li>
+                    <li>Incorrect + "Might be": 2 pts</li>
+                    <li>Incorrect + "Probably": 1 pt</li>
+                    <li>Incorrect + "Definitely": 0 pts</li>
+                </ul>
+                <p><strong>Current Top Performers:</strong></p>
+                <ol id="dynamic-leaderboard" style="font-size: 0.9em; font-weight: bold;">
+                    <li>Loading live data...</li>
+                </ol>
+                <p class="text-success fw-bold mb-0">Secure a top spot on the leaderboard to qualify for the reward!</p>
+            </div>
+
+            <button onclick="showSection('step-video')" class="btn btn-primary mt-3">Next</button>
         </div>
 
         <div id="step-video" class="hidden">
             <h2>Page 3: Watch Video</h2>
             <p>Please click "Start Video" when you are ready. <strong>You cannot pause, rewind, or rewatch this video.</strong> The questions will begin automatically when it finishes.</p>
-            
             <button id="start-video-btn" onclick="playExpVideo()" class="btn btn-success mb-3">Start Video</button>
-            
             <div class="ratio ratio-16x9 mb-3" style="position: relative;">
                 <div id="yt-player"></div>
                 <div class="glass-overlay"></div>
@@ -83,6 +94,10 @@
 
         <div id="step-question" class="hidden">
             <h2 id="question-title">Page X: Question</h2>
+            <div id="leaderboard-question-reminder" class="hidden alert alert-warning p-2 mb-3" style="font-size: 0.85em;">
+                <strong>🏆 Leaderboard Goal:</strong> <span id="leaderboard-target">Loading goal...</span> <br>
+                <em>Scoring reminder: Highest points awarded for correct answers with "Definitely" confidence.</em>
+            </div>
             <p class="lead" id="question-text"></p>
             <div id="timer-container" class="timer hidden">Time remaining: <span id="timer">15</span> seconds</div>
             <div id="options-container" class="mt-4 p-3 bg-light border rounded"></div>
@@ -92,42 +107,35 @@
         <div id="step-final" class="hidden">
             <h2>Saving Results...</h2>
             <p>Your final score is: <strong id="final-score"></strong> / 50</p>
+            <p id="rank-display" class="hidden text-success fs-4"></p>
             <button id="finish-btn" class="btn btn-secondary" disabled>Saving data...</button>
         </div>
 
         <div id="step-thanks" class="hidden">
             <h2>Experiment Complete</h2>
             <p class="lead">Your final confidence-weighted score is: <strong id="thanks-score"></strong> / 50</p>
+            <p id="thanks-rank-display" class="hidden text-success fs-4"></p>
             <p>Thank you for participating! Your data has been saved successfully.</p>
         </div>
     </div>
 
     <script>
-        // --- YOUTUBE API SETUP ---
-        let player;
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz6lnb46hwrj1mZ4275z3yY9pGWDIsfv4lqKPMHaMSVsPGkDUfpW9s5FuNuSkImVWfs/exec";
         
-        // Load the YouTube IFrame Player API code asynchronously.
+        let player;
+        let liveScores = [];
+        let topPerformers = [];
+        
         const tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         const firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
-        // This function executes automatically once the API is loaded.
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('yt-player', {
-                videoId: 'mWOR-XVbYgE', // Your target video
-                playerVars: {
-                    'start': 0,         // Start at the beginning (0 seconds)
-                    'end': 252,         // End at 4:12 (252 seconds)
-                    'controls': 0,      // Hide controls
-                    'disablekb': 1,     // Disable keyboard shortcuts
-                    'rel': 0,           // Hide related videos at the end
-                    'modestbranding': 1,
-                    'playsinline': 1
-                },
-                events: {
-                    'onStateChange': onPlayerStateChange
-                }
+                videoId: 'mWOR-XVbYgE',
+                playerVars: { 'start': 0, 'end': 252, 'controls': 0, 'disablekb': 1, 'rel': 0, 'modestbranding': 1, 'playsinline': 1 },
+                events: { 'onStateChange': onPlayerStateChange }
             });
         }
 
@@ -137,27 +145,11 @@
         }
 
         function onPlayerStateChange(event) {
-            // event.data === 0 means the video has ENDED
-            if (event.data === YT.PlayerState.ENDED) {
-                startQuestions();
-            }
+            if (event.data === YT.PlayerState.ENDED) startQuestions();
         }
-        // --- END YOUTUBE API SETUP ---
 
+        const SCALE_OPTIONS = ["Definitely True", "Probably True", "Might be True", "Might be False", "Probably False", "Definitely False"];
 
-        // --- EXPERIMENT LOGIC ---
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz6lnb46hwrj1mZ4275z3yY9pGWDIsfv4lqKPMHaMSVsPGkDUfpW9s5FuNuSkImVWfs/exec";
-        
-        const SCALE_OPTIONS = [
-            "Definitely True", 
-            "Probably True", 
-            "Might be True", 
-            "Might be False", 
-            "Probably False", 
-            "Definitely False"
-        ];
-
-        // 10 Facts mapped to statements and truth values
         const QUESTIONS = [
             { q: "The initial piece of track visible at the very start of the video is green.", isTrue: false },
             { q: "The weather outside the house appears to be bright and sunny.", isTrue: true },
@@ -171,21 +163,16 @@
             { q: "A dog makes a brief appearance at some point during the video.", isTrue: false }
         ];
 
-        // Added arrays for answers and times, and a tracker for start time
         let state = {
             pid: '', tg: '', rg: '', age: '', major: '', eth: '',
-            score: 0, currentQ: 0, timer: null,
-            answers: [], times: [], qStartTime: 0
+            score: 0, currentQ: 0, timer: null, answers: [], times: [], qStartTime: 0
         };
 
         let isSaving = false;
 
         function showSection(id) {
             document.querySelectorAll('.container > div').forEach(div => {
-                // Ignore the embedded player itself when hiding containers
-                if(div.id !== 'yt-player') {
-                    div.classList.add('hidden');
-                }
+                if(div.id !== 'yt-player') div.classList.add('hidden');
             });
             document.getElementById(id).classList.remove('hidden');
         }
@@ -196,28 +183,50 @@
             if (params.has('d')) {
                 try {
                     const decodedData = JSON.parse(atob(params.get('d')));
-                    state.pid = decodedData.p;
-                    state.tg = decodedData.t;
-                    state.rg = decodedData.r;
-                    
-                    if (state.rg === 'reward') {
-                        document.getElementById('reward-notice').classList.remove('hidden');
-                    }
-                    showSection('step-demographics');
+                    state.pid = decodedData.p; state.tg = decodedData.t; state.rg = decodedData.r;
                 } catch (error) {
-                    console.error("Failed to decode link parameters", error);
-                    alert("This experiment link appears to be invalid or broken.");
+                    console.error("Failed to decode", error);
                 }
-            } 
-            else if (params.has('pid')) {
-                state.pid = params.get('pid');
-                state.tg = params.get('tg');
-                state.rg = params.get('rg');
-                
-                if (state.rg === 'reward') document.getElementById('reward-notice').classList.remove('hidden');
-                showSection('step-demographics');
+            } else if (params.has('pid')) {
+                state.pid = params.get('pid'); state.tg = params.get('tg'); state.rg = params.get('rg');
             }
+
+            if (state.rg === 'leaderboard group') {
+                document.getElementById('leaderboard-instructions').classList.remove('hidden');
+                fetchLeaderboard();
+            }
+            if (state.pid) showSection('step-demographics');
         };
+
+        function fetchLeaderboard() {
+            fetch(SCRIPT_URL)
+                .then(response => response.json())
+                .then(data => {
+                    if(data.status === 'success') {
+                        liveScores = data.scores;
+                        topPerformers = data.topPerformers;
+                        updateLeaderboardUI();
+                    }
+                })
+                .catch(err => {
+                    console.error("Error fetching leaderboard:", err);
+                    document.getElementById('dynamic-leaderboard').innerHTML = "<li>Leaderboard currently unavailable</li>";
+                });
+        }
+
+        function updateLeaderboardUI() {
+            const list = document.getElementById('dynamic-leaderboard');
+            if(topPerformers.length === 0) {
+                list.innerHTML = "<li>No data yet. Be the first!</li>";
+                document.getElementById('leaderboard-target').innerText = "Set the high score!";
+                return;
+            }
+            list.innerHTML = "";
+            topPerformers.forEach(p => {
+                list.innerHTML += `<li>Participant ${p.pid} - ${p.score} pts</li>`;
+            });
+            document.getElementById('leaderboard-target').innerText = `Beat ${topPerformers[0].score} pts!`;
+        }
         
         function generateLink() {
             const pid = document.getElementById('admin-pid').value;
@@ -225,14 +234,11 @@
             const rg = document.getElementById('admin-rg').value;
             const baseUrl = window.location.href.split('?')[0];
             
-            const expData = { p: pid, t: tg, r: rg };
-            const encodedData = btoa(JSON.stringify(expData));
-            
+            const encodedData = btoa(JSON.stringify({ p: pid, t: tg, r: rg }));
             const link = `${baseUrl}?d=${encodedData}`;
             
             const linkEl = document.getElementById('exp-link');
-            linkEl.href = link;
-            linkEl.innerText = link;
+            linkEl.href = link; linkEl.innerText = link;
             document.getElementById('link-display').classList.remove('hidden');
         }
 
@@ -245,9 +251,7 @@
         }
 
         function startQuestions() {
-            if(player && typeof player.stopVideo === 'function') {
-                player.stopVideo();
-            }
+            if(player && typeof player.stopVideo === 'function') player.stopVideo();
             state.currentQ = 0;
             showQuestion();
         }
@@ -257,6 +261,24 @@
                 document.getElementById('final-score').innerText = state.score;
                 document.getElementById('thanks-score').innerText = state.score;
                 
+                if (state.rg === 'leaderboard group') {
+                    let combinedScores = [...liveScores, state.score];
+                    combinedScores.sort((a, b) => b - a);
+                    
+                    let rank = combinedScores.indexOf(state.score) + 1;
+                    let suffix = "th";
+                    if (rank % 10 === 1 && rank % 100 !== 11) suffix = "st";
+                    else if (rank % 10 === 2 && rank % 100 !== 12) suffix = "nd";
+                    else if (rank % 10 === 3 && rank % 100 !== 13) suffix = "rd";
+
+                    const rankText = `🏆 You placed <strong>${rank}${suffix}</strong> out of ${combinedScores.length} on the live leaderboard!`;
+                    
+                    document.getElementById('rank-display').innerHTML = rankText;
+                    document.getElementById('rank-display').classList.remove('hidden');
+                    document.getElementById('thanks-rank-display').innerHTML = rankText;
+                    document.getElementById('thanks-rank-display').classList.remove('hidden');
+                }
+
                 showSection('step-final');
                 submitToGoogle(); 
                 return;
@@ -265,6 +287,10 @@
             const q = QUESTIONS[state.currentQ];
             document.getElementById('question-title').innerText = `Statement ${state.currentQ + 1} of 10`;
             document.getElementById('question-text').innerText = q.q;
+            
+            if (state.rg === 'leaderboard group') {
+                document.getElementById('leaderboard-question-reminder').classList.remove('hidden');
+            }
             
             const optionsDiv = document.getElementById('options-container');
             optionsDiv.innerHTML = '';
@@ -277,11 +303,10 @@
                     </div>`;
             });
 
-            // Start timing the question
             state.qStartTime = Date.now();
             showSection('step-question');
 
-            if (state.tg === 'limited') {
+            if (state.tg === 'time limited group') {
                 document.getElementById('timer-container').classList.remove('hidden');
                 let timeLeft = 15;
                 document.getElementById('timer').innerText = timeLeft;
@@ -291,7 +316,7 @@
                     document.getElementById('timer').innerText = timeLeft;
                     if (timeLeft <= 0) {
                         clearInterval(state.timer);
-                        submitAnswer(); // Auto-submit when time runs out
+                        submitAnswer(); 
                     }
                 }, 1000);
             } else {
@@ -301,20 +326,15 @@
 
         function submitAnswer() {
             clearInterval(state.timer);
-            
-            // Calculate elapsed time in seconds with 2 decimal places
             const timeTaken = ((Date.now() - state.qStartTime) / 1000).toFixed(2);
-            
             const selected = document.querySelector('input[name="answer"]:checked');
-            
-            let answerValue = "No Answer"; // Fallback if they run out of time
+            let answerValue = "No Answer"; 
 
             if (selected) {
                 answerValue = selected.value;
                 const isTrue = QUESTIONS[state.currentQ].isTrue;
                 let points = 0;
 
-                // Confidence-weighted scoring
                 if (isTrue) {
                     if (answerValue === "Definitely True") points = 5;
                     else if (answerValue === "Probably True") points = 4;
@@ -330,14 +350,11 @@
                     else if (answerValue === "Probably True") points = 1;
                     else if (answerValue === "Definitely True") points = 0;
                 }
-                
                 state.score += points;
             }
 
-            // Save the answer and the time taken for this question
             state.answers.push(answerValue);
             state.times.push(timeTaken);
-
             state.currentQ++;
             showQuestion();
         }
@@ -346,7 +363,6 @@
             if (isSaving) return; 
             isSaving = true;
 
-            // Including the Answers and Times arrays
             const payload = {
                 "Participant number": state.pid,
                 "Time": state.tg,
@@ -370,7 +386,6 @@
             }).catch(err => {
                 console.error(err);
                 alert("There was an error saving your data. Please contact the researcher.");
-                
                 isSaving = false; 
                 const btn = document.getElementById('finish-btn');
                 if (btn) {

@@ -1,0 +1,63 @@
+function doPost(e) {
+  try {
+    // 1. Parse the incoming JSON data from the POST request
+    var data = JSON.parse(e.postData.contents);
+    
+    // 2. Extract the base variables from the JSON payload
+    var participantNumber = data["Participant number"] || data["participantNumber"] || "";
+    var time = data["Time"] || data["time"] || "";
+    var reward = data["Reward"] || data["reward"] || "";
+    var age = data["Age"] || data["age"] || "";
+    var major = data["Major"] || data["major"] || "";
+    var ethnicity = data["Ethnicity"] || data["ethnicity"] || "";
+    var score = data["Score"] || data["score"] || "";
+    
+    // Extract the arrays for answers and times
+    var answers = data["Answers"] || [];
+    var times = data["Times"] || [];
+    
+    // 3. Access the active spreadsheet and its active sheet
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    
+    // 4. Create an array representing the new row of data (Base info)
+    var rowData = [
+      participantNumber, 
+      time, 
+      reward, 
+      age, 
+      major, 
+      ethnicity, 
+      score
+    ];
+    
+    // Append the 10 answers to the row
+    for(var i = 0; i < 10; i++) {
+        rowData.push(answers[i] !== undefined ? answers[i] : "");
+    }
+    
+    // Append the 10 times to the row
+    for(var j = 0; j < 10; j++) {
+        rowData.push(times[j] !== undefined ? times[j] : "");
+    }
+    
+    // 5. Append the array as a new row at the bottom of the sheet
+    sheet.appendRow(rowData);
+    
+    // 6. Return a success response
+    var response = {
+      "status": "success",
+      "message": "Data successfully appended."
+    };
+    return ContentService.createTextOutput(JSON.stringify(response))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch (error) {
+    // Handle any errors
+    var errorResponse = {
+      "status": "error",
+      "message": error.toString()
+    };
+    return ContentService.createTextOutput(JSON.stringify(errorResponse))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
