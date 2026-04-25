@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Psych Experiment</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { padding: 50px; background-color: #f8f9fa; }
         .container { max-width: 800px; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
@@ -73,9 +74,14 @@
                     <li>Incorrect + "Definitely": 0 pts</li>
                 </ul>
                 <p><strong>Current Top Performers:</strong></p>
-                <ol id="dynamic-leaderboard" style="font-size: 0.9em; font-weight: bold;">
+                <ol id="dynamic-leaderboard" class="mb-1" style="font-size: 0.9em; font-weight: bold;">
                     <li>Loading live data...</li>
                 </ol>
+                
+                <div id="instructionChartContainer" class="hidden mt-3 mb-3 bg-white p-2 rounded border">
+                    <canvas id="instructionChart"></canvas>
+                </div>
+
                 <p class="text-success fw-bold mb-0">Secure a top spot on the leaderboard to qualify for the reward!</p>
             </div>
 
@@ -115,6 +121,12 @@
             <h2>Experiment Complete</h2>
             <p class="lead">Your final confidence-weighted score is: <strong id="thanks-score"></strong> / 50</p>
             <p id="thanks-rank-display" class="hidden text-success fs-4"></p>
+            
+            <div id="finalChartContainer" class="hidden mt-4 mb-4 p-3 bg-white border rounded shadow-sm">
+                <h5 class="text-center mb-3">Final Standings</h5>
+                <canvas id="finalChart"></canvas>
+            </div>
+
             <p>Thank you for participating! Your data has been saved successfully.</p>
         </div>
     </div>
@@ -125,6 +137,7 @@
         let player;
         let liveScores = [];
         let topPerformers = [];
+        let chartInstances = {};
         
         const tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
@@ -198,6 +211,44 @@
             if (state.pid) showSection('step-demographics');
         };
 
+        function drawChart(canvasId, data, highlightPid) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            
+            if (chartInstances[canvasId]) {
+                chartInstances[canvasId].destroy();
+            }
+            
+            const labels = data.map(p => p.pid === highlightPid ? `You (${p.pid})` : `P-${p.pid}`);
+            const scores = data.map(p => p.score);
+            
+            // Highlight the current user in red, others in blue
+            const bgColors = data.map(p => p.pid === highlightPid ? 'rgba(255, 99, 132, 0.7)' : 'rgba(54, 162, 235, 0.7)');
+            const borderColors = data.map(p => p.pid === highlightPid ? 'rgba(255, 99, 132, 1)' : 'rgba(54, 162, 235, 1)');
+
+            chartInstances[canvasId] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Points',
+                        data: scores,
+                        backgroundColor: bgColors,
+                        borderColor: borderColors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { beginAtZero: true, max: 50 }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
         function fetchLeaderboard() {
             fetch(SCRIPT_URL)
                 .then(response => response.json())
@@ -222,10 +273,14 @@
                 return;
             }
             list.innerHTML = "";
-            topPerformers.forEach(p => {
+            topPerformers.slice(0, 3).forEach(p => {
                 list.innerHTML += `<li>Participant ${p.pid} - ${p.score} pts</li>`;
             });
             document.getElementById('leaderboard-target').innerText = `Beat ${topPerformers[0].score} pts!`;
+            
+            // Draw the instruction page graph (Top 5)
+            document.getElementById('instructionChartContainer').classList.remove('hidden');
+            drawChart('instructionChart', topPerformers.slice(0, 5), null);
         }
         
         function generateLink() {
@@ -359,6 +414,30 @@
             showQuestion();
         }
 
+        function renderFinalGraph() {
+            if (state.rg !== 'leaderboard group') return;
+            
+            document.getElementById('finalChartContainer').classList.remove('hidden');
+            
+            let finalData = [...topPerformers];
+            // Remove the user from the array if they accidentally got fetched twice
+            finalData = finalData.filter(p => p.pid !== state.pid); 
+            
+            // Add the user's new score to the dataset and sort it
+            finalData.push({pid: state.pid, score: state.score});
+            finalData.sort((a, b) => b.score - a.score);
+            
+            // Take top 5
+            let chartData = finalData.slice(0, 5);
+            
+            // If the user didn't make the top 5, append them to the end of the chart anyway
+            if (!chartData.find(p => p.pid === state.pid)) {
+                chartData.push({pid: state.pid, score: state.score});
+            }
+            
+            drawChart('finalChart', chartData, state.pid);
+        }
+
         function submitToGoogle() {
             if (isSaving) return; 
             isSaving = true;
@@ -383,6 +462,8 @@
                 body: JSON.stringify(payload)
             }).then(() => {
                 showSection('step-thanks');
+                // Render the graph after switching to the thanks section so the canvas has physical dimensions
+                renderFinalGraph();
             }).catch(err => {
                 console.error(err);
                 alert("There was an error saving your data. Please contact the researcher.");
