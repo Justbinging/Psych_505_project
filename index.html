@@ -316,7 +316,8 @@
             }
             list.innerHTML = "";
             topPerformers.slice(0, 3).forEach(p => {
-                list.innerHTML += `<li>Participant ${p.pid} - ${p.score} pts</li>`;
+                // Changed this line to only display the score, removing the participant name/PID
+                list.innerHTML += `<li>${p.score} pts</li>`;
             });
             document.getElementById('leaderboard-target').innerText = `Beat ${topPerformers[0].score} pts!`;
             
