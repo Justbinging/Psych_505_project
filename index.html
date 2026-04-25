@@ -79,6 +79,7 @@
                 </ol>
                 
                 <div id="instructionChartContainer" class="hidden mt-3 mb-3 bg-white p-2 rounded border">
+                    <h6 class="text-center mt-2">Score Distribution</h6>
                     <canvas id="instructionChart"></canvas>
                 </div>
 
@@ -123,7 +124,7 @@
             <p id="thanks-rank-display" class="hidden text-success fs-4"></p>
             
             <div id="finalChartContainer" class="hidden mt-4 mb-4 p-3 bg-white border rounded shadow-sm">
-                <h5 class="text-center mb-3">Final Standings (All Participants)</h5>
+                <h5 class="text-center mb-3">Score Distribution</h5>
                 <canvas id="finalChart"></canvas>
             </div>
 
@@ -211,44 +212,80 @@
             if (state.pid) showSection('step-demographics');
         };
 
-        function drawChart(canvasId, data, highlightPid) {
+        function drawChart(canvasId, data, currentParticipantScore) {
             const ctx = document.getElementById(canvasId).getContext('2d');
             
             if (chartInstances[canvasId]) {
                 chartInstances[canvasId].destroy();
             }
             
-            const labels = data.map(p => p.pid === highlightPid ? `You (${p.pid})` : `P-${p.pid}`);
-            const scores = data.map(p => p.score);
+            // Refined bins to create a more prominent bell curve based on the current data
+            const labels = ["0-15", "16-20", "21-25", "26-30", "31-35", "36-40", "41-45", "46-50"];
+            const counts = new Array(8).fill(0);
             
-            const bgColors = data.map(p => p.pid === highlightPid ? 'rgba(255, 99, 132, 0.7)' : 'rgba(54, 162, 235, 0.7)');
-            const borderColors = data.map(p => p.pid === highlightPid ? 'rgba(255, 99, 132, 1)' : 'rgba(54, 162, 235, 1)');
+            function getBinIndex(s) {
+                if (s <= 15) return 0;
+                if (s <= 20) return 1;
+                if (s <= 25) return 2;
+                if (s <= 30) return 3;
+                if (s <= 35) return 4;
+                if (s <= 40) return 5;
+                if (s <= 45) return 6;
+                return 7;
+            }
+            
+            data.forEach(p => {
+                let s = parseInt(p.score);
+                if (!isNaN(s)) {
+                    counts[getBinIndex(s)]++;
+                }
+            });
+            
+            let highlightIndex = -1;
+            if (currentParticipantScore !== null) {
+                highlightIndex = getBinIndex(currentParticipantScore);
+            }
+            
+            const bgColors = counts.map((_, i) => i === highlightIndex ? 'rgba(255, 99, 132, 0.7)' : 'rgba(54, 162, 235, 0.7)');
+            const borderColors = counts.map((_, i) => i === highlightIndex ? 'rgba(255, 99, 132, 1)' : 'rgba(54, 162, 235, 1)');
 
             chartInstances[canvasId] = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Points',
-                        data: scores,
+                        label: 'Number of Participants',
+                        data: counts,
                         backgroundColor: bgColors,
                         borderColor: borderColors,
-                        borderWidth: 1
+                        borderWidth: 1,
+                        barPercentage: 1.0, 
+                        categoryPercentage: 1.0 
                     }]
                 },
                 options: {
                     responsive: true,
                     scales: {
-                        y: { beginAtZero: true, max: 50 },
+                        y: { 
+                            beginAtZero: true, 
+                            ticks: { stepSize: 1 }, 
+                            title: { display: true, text: 'Number of Participants' }
+                        },
                         x: {
-                            ticks: {
-                                // Hide labels on x-axis if there are too many participants to keep it clean
-                                display: data.length <= 15
-                            }
+                            title: { display: true, text: 'Score Range' }
                         }
                     },
                     plugins: {
-                        legend: { display: false }
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) { return 'Score Range: ' + context[0].label; },
+                                label: function(context) { 
+                                    let extra = (context.dataIndex === highlightIndex) ? ' (You are in this range)' : '';
+                                    return context.raw + ' participant(s)' + extra; 
+                                }
+                            }
+                        }
                     }
                 }
             });
@@ -278,13 +315,11 @@
                 return;
             }
             list.innerHTML = "";
-            // List only the top 3 scores in text
             topPerformers.slice(0, 3).forEach(p => {
                 list.innerHTML += `<li>Participant ${p.pid} - ${p.score} pts</li>`;
             });
             document.getElementById('leaderboard-target').innerText = `Beat ${topPerformers[0].score} pts!`;
             
-            // Draw the instruction page graph using ALL participants
             document.getElementById('instructionChartContainer').classList.remove('hidden');
             drawChart('instructionChart', topPerformers, null);
         }
@@ -429,10 +464,8 @@
             finalData = finalData.filter(p => p.pid !== state.pid); 
             
             finalData.push({pid: state.pid, score: state.score});
-            finalData.sort((a, b) => b.score - a.score);
             
-            // Draw the final page graph using ALL participants
-            drawChart('finalChart', finalData, state.pid);
+            drawChart('finalChart', finalData, state.score);
         }
 
         function submitToGoogle() {
